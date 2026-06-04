@@ -107,7 +107,7 @@ struct MESModel
 struct MEModel
 {
     MEProp Prop;
-    METypedForm<MESModel> SModels[while(HasNextForm($))];
+    METypedForm<MESModel> SModels[while(NextFormIs($, "SMDL"))];
 };
 
 struct MESection
@@ -118,7 +118,7 @@ struct MESection
 
 struct MELevel
 {
-    METypedForm<MESection> Section[2];
+    METypedForm<MESection> Section[while(NextFormIs($, "SECT"))];
 };
 
 // The assumption is that MEO and binary IFFs begin with a FORM
@@ -145,6 +145,16 @@ fn HasNextForm(u128 ptr)
 
     str next = std::mem::read_string(ptr,4);
     return next == "FORM";
+};
+
+fn NextFormIs(u128 ptr, str formType)
+{
+    if (ptr + sizeof(MEFormHeader) >= sizeof($) || ! HasNextForm(ptr)) {
+        return false;
+    }
+    
+    MEFormHeader header @ ptr;
+    return header.formType == formType;
 };
 
 MEObject root @ 0x0;
