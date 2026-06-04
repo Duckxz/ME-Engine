@@ -101,12 +101,13 @@ struct MESModel
 {
     MEProp Name;
     METypedForm<MEMesh> Mesh;
+    char SModelName[Name.Header.size-2] @ addressof(Name.ValueSlice)+2;
 };
 
 struct MEModel
 {
     MEProp Prop;
-    METypedForm<MESModel> SModel;
+    METypedForm<MESModel> SModels[while(HasNextForm($))];
 };
 
 struct MESection
@@ -141,8 +142,8 @@ fn HasNextForm(u128 ptr)
     if (ptr + 4 >= sizeof($)) {
         return false;
     }
-    
-    char next[4] @ ptr;
+
+    str next = std::mem::read_string(ptr,4);
     return next == "FORM";
 };
 
@@ -159,10 +160,10 @@ AISC
 UJOY
 DIFF
 STSC
-WAYP
-PKUP
+WAYP: WAYPoint?
+PKUP: PicKUP?
 LAPS: Number of LAPS, 1 int
-STRN; (Motor) STRENgth? contains 3 floats
+STRN: Motor STRENgth? contains 3 floats
 BOW : May be literal bow of the boat? contains 3 floats
 CHAM
 TRHI
@@ -171,9 +172,9 @@ LABE
 BTIM
 SKY : SKY texture, links to BMP
 BOOK
-WFN 
+WFN
 BBFN
-ÇBFN
+CBFN
 LVFN
 CHOB: CHaracter OBject? links to a character model meo
 MNOB: MeNu Object, specifies location and meo file for this object
@@ -181,22 +182,22 @@ GMOB: GaMeOBject? links to bct file with a BTCL
 STFNP: Scene Stage FileName, links to an iff stage
 SCFN: SCene FileName, links to an iff scene
 ANIM: Contains a string indicating a layer, then 5 floats
-STRT: STaRTing Position, 4 flaots
+STRT: STaRTing Position, 4 floats
 CPLC
 CPLG
 CPLS
 PPNT
 PELE
-MSND: <otor SouND, links to a wav
+MSND: Motor SouND, links to a wav
 MAXV: MAX Volume?
 MPOW: Max POWer? Contains an int
 STAN: Contains a single float
 MPOS: Motor POSition?, contains 6 floats
 HELP
-PLYR
-HIGH
+PLYR: PLaYeR?
+HIGH: HIGHscore?
 STAG: STAGe
-SCEN
+SCEN: SCENe?
 WPCL
 BTCL: Something to define boats
 FAKF
@@ -206,7 +207,7 @@ BBND
 CBND
 SECD
 SECT
-LVL 
+LVL
 GTLI: Game Track List Item? Contains multiple GTRK, check GameInfo.iff
 GTRK: Game TRacK
 GCHL: Seems to be for championship levels? Also contains GCLI and GCUL to indicate which characters appear as NPCs
@@ -246,7 +247,7 @@ EMIS: EMISsive strength? 1 int
 DEST: No idea, 2 ints
 SPRG
 FLAR: FLARe, 2 floats, 1 RGBA, 1 int (may be index into flare material array)
-DMP 
+DMP
 CDMP: C? DaMPening? 2 floats
 FRIC: FRICtion? 6 ints
 ELAS: ELASticity? 1 float
@@ -279,12 +280,12 @@ AMBL: AMBient Light? 1 RGBA, 1 float (may be strength?)
 FOG : FOG, 1 bool, 1 RGBA, 3 floats
 PHYS: PHYSics settings
 SPLN: SPLiNe?
-VTIB
-VTXB
-MATR
-MESH
-SMDL
-MDL 
-MENU: MENU description, found in mnu files, not a form, contains an ITEMS with multiple ITEM entries with 1 int, a string, a lik  to a meo and a signedint
+VTIB: Might be VerTex Indice Buffer
+VTXB: Might be VerTeX Buffer
+MATR: Material
+MESH: Mesh
+SMDL: Something? MoDeL
+MDL: MoDeL, holds an SMDL
+MENU: MENU description, found in mnu files, not a form, contains an ITEMS with multiple ITEM entries with 1 int, a string, a link to a meo and a signed int
 ITEMS: Contain one or mores ITEM entries
 */
