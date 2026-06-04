@@ -107,7 +107,7 @@ struct MESModel
 struct MEModel
 {
     MEProp Prop;
-    METypedForm<MESModel> SModels[while(NextFormIs($, "SMDL"))];
+   METypedForm<MESModel> SModels[while(NextFormIs($, "SMDL"))];
 };
 
 struct MESection
@@ -118,7 +118,7 @@ struct MESection
 
 struct MELevel
 {
-    METypedForm<MESection> Section[while(NextFormIs($, "SECT"))];
+    METypedForm<MESection> Section[1];
 };
 
 // The assumption is that MEO and binary IFFs begin with a FORM
