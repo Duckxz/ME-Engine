@@ -28,41 +28,66 @@ fn formtype_to_id(str TypeName)
 
 struct MEPropHeader
 {
-    char field[4];
+    char Field[4];
     u8 unk0;
     u8 unk1;
     u8 unk2;
-    u8 size;
+    u8 Size;
 };
 
 struct MEProp
 {
     MEPropHeader Header;
+};
 
-    if (Header.field == "VTXB") {
-        // Ugly hack for the nonsensical VTXB prop
-        u8 unk0; // <- seems to be garbage?
-        u128 address = std::mem::find_string_in_range(0,$,sizeof($),"VTIB");
-        if (address != -1)
-            u8 ValueSlice[address - $];
-        else
-            u8 ValueSlice[sizeof($) - $];
-    } else if (Header.field == "VTIB") {
-        // Even uglier hack for the even more nonsensical VTIB prop
-        u8 unk0; // <- also garbage?
-        u8 unk1;
-        u128 address = std::mem::find_string_in_range(0,$,sizeof($),"FORM");
-        if (address != -1)
-            u16 ValueSlice[(address - $)>>1];
-        else
-            u16 ValueSlice[(sizeof($) - $)>>1];
-    } else if (Header.size > 0) {
-        match (Header.size) {
+struct MEVertexBuffer : MEProp
+{
+    if (Header.Field != "VTXB")
+        return;
+        
+    u8 unk0;
+    u128 address = std::mem::find_string_in_range(0,$,sizeof($),"VTIB");
+    if (address != -1)
+        u8 Vertices[address - $];
+    else
+        u8 Vertices[sizeof($) - $];
+};
+
+struct MEIndiceBuffer : MEProp
+{
+    if (Header.Field != "VTIB")
+        return;
+        
+    u8 IndiceCount;
+    u8 unk0;
+    
+    u128 address = std::mem::find_string_in_range(0,$,sizeof($),"FORM");
+    if (address != -1)
+        u16 Indices[(address - $)>>1];
+    else
+        u16 Indices[(sizeof($) - $)>>1];    
+};
+
+struct MEDataProp : MEProp
+{
+    if (Header.Size > 0)
+    {
+        match (Header.Size) {
+            (0): padding[0];
             (1): u8 Value;
             (2): u16 Value;
             (4): u32 Value;
-            (_): u8 ValueSlice[Header.size];
+            (_): u8 ValueSlice[Header.Size];
         }
+    }
+};
+
+struct MEStringProp : MEProp
+{
+    if (Header.Size > 0) {
+        u16 Length;
+        // ^ Suspected to be a length u16, but actual way to read is to subtract 2 from the size
+        char String[Header.Size - 2];
     }
 };
 
@@ -74,18 +99,18 @@ struct METypedProp<T>
 
 struct MEFormHeader
 {
-    char id[4];
+    char Id[4];
     u8 unk0;
     u8 unk1;
-    u8 count;
+    u8 Count;
     u8 unk2;
-    char formType[4];
+    char Type[4];
 };
 
 fn typedform_type_check(str TypeName, ref MEFormHeader Header)
 {   
     str typeId = formtype_to_id(TypeName);
-    return Header.formType == typeId;
+    return Header.Type == typeId;
 };
 
 fn typedform_type_check_at(str TypeName, u128 ptr)
@@ -97,23 +122,42 @@ fn typedform_type_check_at(str TypeName, u128 ptr)
     return typedform_type_check(TypeName, Header);
 };
 
-struct METypedForm<T>
+struct MEForm<T>
 {
+    bool ParentBreaking = false;
     if (std::mem::eof())
-        return;
-        
-    //MEFormHeader Headert[[no_unique_address]];
-    MEFormHeader Header;
-    
-    if (Header.id != "FORM" )
-        break;
-        
-    if (! typedform_type_check(typenameof(T), Header))
     {
-        std::print("{} is not a {} (should be {})", Header.formType, typenameof(T), formtype_to_id(typenameof(T)));
+        std::print("Reached EOF trying to place an MEForm<T>");
+        ParentBreaking = true;
         break;
     }
 
+    MEFormHeader _Header [[no_unique_address, hidden]];
+    
+    if (! typedform_type_check(typenameof(T), _Header))
+    {
+        ParentBreaking = true;
+        break;
+    }
+
+    MEFormHeader Header;
+};
+
+struct METypedForm<T>
+{
+    if (std::mem::eof())
+        break;
+        
+    //MEFormHeader Headert[[no_unique_address]];
+    MEFormHeader _Header [[no_unique_address]];
+    
+    if (_Header.Id != "FORM" )
+        break;
+        
+    if (! typedform_type_check(typenameof(T), _Header))
+        break;
+
+    MEFormHeader Header;
     T Value;
 };
 
@@ -125,62 +169,79 @@ struct MEColor
     u8 A;
 };
 
-struct MEMaterial
+struct MEMaterial : MEForm<MEMaterial>
 {
-    MEProp AlphaColor;
-    MEProp DiffuseColor;
-    MEProp SpecularColor;
-    MEProp SpecularLevel;
-    MEProp Glossiness;
-    MEProp AnimatedTexture;
-    MEProp LGT1;
-    MEProp LGTA;
-    MEProp Texture;
-    MEProp AlphaTexture;
-    MEProp TEXE;
-    MEProp Alpha;
-    MEProp Reflection;
-    MEProp Mips;
-    MEProp ZRead;
-    MEProp ZWrite;
-    MEProp AlphaTest;
-    MEProp ATVL;
-    MEProp Wind;
-    MEProp SMOO;
-    MEProp DFOG;
+    if (ParentBreaking)
+        break;
+
+    MEDataProp AlphaColor;
+    MEDataProp DiffuseColor;
+    MEDataProp SpecularColor;
+    MEDataProp SpecularLevel;
+    MEDataProp Glossiness;
+    MEDataProp AnimatedTexture;
+    MEDataProp LGT1;
+    MEDataProp LGTA;
+    MEDataProp Texture;
+    MEDataProp AlphaTexture;
+    MEDataProp TEXE;
+    MEDataProp Alpha;
+    MEDataProp Reflection;
+    MEDataProp Mips;
+    MEDataProp ZRead;
+    MEDataProp ZWrite;
+    MEDataProp AlphaTest;
+    MEDataProp ATVL;
+    MEDataProp Wind;
+    MEDataProp SMOO;
+    MEDataProp DFOG;
 };
 
-struct MEMesh
+struct MEMesh : MEForm<MEMesh>
 {
-    METypedForm<MEMaterial> Material;
-    MEProp VertexBuffer;
-    MEProp IndiceBuffer;
+    if (ParentBreaking)
+        break;
+
+    MEMaterial Material;
+    MEVertexBuffer VertexBuffer;
+    MEIndiceBuffer IndiceBuffer;
+} [[hex::visualize("3d", VertexBuffer.Vertices, IndiceBuffer.Indices)]];
+
+struct MESModel : MEForm<MESModel>
+{
+    if (ParentBreaking)
+        break;
+
+    MEStringProp Name;
+    MEMesh Mesh;
 };
 
-struct MESModel
+struct MEModel : MEForm<MEModel>
 {
-    MEProp Name;
-    METypedForm<MEMesh> Mesh;
-    char SModelName[Name.Header.size-2] @ addressof(Name.ValueSlice)+2;
-};
+    if (ParentBreaking)
+        break;
 
-struct MEModel
-{
-    MEProp Prop;
+    MEDataProp Prop;
     //METypedForm<MESModel> SModels[while(!std::mem::eof())];
     //MERecursiveTypedForm<MESModel> SModels;
-    METypedForm<MESModel> SModels[while(typedform_type_check_at(typenameof(MESModel), $))];
+    MESModel SModels[while(true)];
 };
 
-struct MESection
+struct MESection : MEForm<MESection>
 {
-    MEProp SECD;
-    METypedForm<MEModel> Model;
+    if (ParentBreaking)
+        break;
+
+    MEDataProp SECD;
+    MEModel Model;
 };
 
-struct MELevel
+struct MELevel : MEForm<MELevel>
 {
-    METypedForm<MESection> Section[while(typedform_type_check_at(typenameof(MESection), $))];
+    if (ParentBreaking)
+        break;
+
+    MESection Section[while(true)];
 };
 
 // The assumption is that MEO and binary IFFs begin with a FORM
@@ -189,14 +250,14 @@ struct MEObject
     MEFormHeader Header [[no_unique_address]];
 
     // Just in case they export other types of data in a MEO
-    match (Header.formType)
+    match (Header.Type)
     {
-        ("MDL "): METypedForm<MEModel>    Model;
-        ("SMDL"): METypedForm<MESModel>   SModel;
-        ("MESH"): METypedForm<MEMesh>     Mesh;
-        ("MATR"): METypedForm<MEMaterial> Material;
-        ("LVL "): METypedForm<MELevel>    Level;
-        ("SECT"): METypedForm<MESection>  Section;
+        ("MDL "): MEModel    Model;
+        ("SMDL"): MESModel   SModel;
+        ("MESH"): MEMesh     Mesh;
+        ("MATR"): MEMaterial Material;
+        ("LVL "): MELevel    Level;
+        ("SECT"): MESection  Section;
     }
 };
 
