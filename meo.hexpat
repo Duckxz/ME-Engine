@@ -29,6 +29,10 @@ fn formtype_to_id(str TypeName)
         ("MECPLS"): return "CPLS";
         ("MEPathPoint"): return "PPNT";
         ("MEPathElement"): return "PELE";
+        ("MEParticle"): return "PTCL";
+        ("MEBoatControl"): return "BTCL";
+        ("MEFLCL"): return "FLCL";
+        ("MEPhysical"): return "PHYS";
         (_): return "";
     }
 };
@@ -42,6 +46,9 @@ fn proptype_to_id(str TypeName)
         ("MELinkId"): return "LKID";
         ("MEDataProp"): return "PROP";
         ("MEStringProp"): return "PROP";
+        ("MEParticleStartSize"): return "SSZE";
+        ("MEParticleMiddleSize"): return "MSZE";
+        ("MEParticleEndSize"): return "ESZE";
         (_): return "";
     }
 };
@@ -102,12 +109,25 @@ struct MEDataProp : MEProp
     }
 };
 
+struct MEFloatProp : MEProp
+{
+    if (Header.Size > 0)
+        float Value;
+};
+
 struct MEStringProp : MEProp
 {
     if (Header.Size > 0) {
         u16 Length;
         // ^ Suspected to be a length u16, but actual way to read is to subtract 2 from the size
         char String[Header.Size - 2];
+    }
+};
+
+struct MEBoolProp : MEProp
+{
+    if (Header.Size == 1) {
+        bool Bool;
     }
 };
 
@@ -193,7 +213,7 @@ struct MEForm<T>
     bool ParentBreaking = false;
     if (std::mem::eof())
     {
-        std::print("Reached EOF trying to place an MEForm<T>");
+        std::print("Reached EOF trying to place an MEForm<{}>", typenameof(T));
         ParentBreaking = true;
         break;
     }
@@ -226,7 +246,7 @@ struct METypedForm<T>
     T Value;
 };
 
-struct MEColor
+struct MEColor : MEProp
 {
     u8 R;
     u8 G;
@@ -239,16 +259,16 @@ struct MEMaterial : MEForm<MEMaterial>
     if (ParentBreaking)
         break;
 
-    MEDataProp AlphaColor;
-    MEDataProp DiffuseColor;
-    MEDataProp SpecularColor;
+    MEColor AlphaColor;
+    MEColor DiffuseColor;
+    MEColor SpecularColor;
     MEDataProp SpecularLevel;
     MEDataProp Glossiness;
     MEDataProp AnimatedTexture;
     MEDataProp LGT1;
     MEDataProp LGTA;
-    MEDataProp Texture;
-    MEDataProp AlphaTexture;
+    MEStringProp Texture;
+    MEStringProp AlphaTexture;
     MEDataProp TEXE;
     MEDataProp Alpha;
     MEDataProp Reflection;
@@ -256,7 +276,7 @@ struct MEMaterial : MEForm<MEMaterial>
     MEDataProp ZRead;
     MEDataProp ZWrite;
     MEDataProp AlphaTest;
-    MEDataProp ATVL;
+    MEFloatProp ATVL;
     MEDataProp Wind;
     MEDataProp SMOO;
     MEDataProp DFOG;
@@ -270,7 +290,7 @@ struct MEMesh : MEForm<MEMesh>
     MEMaterial Material;
     MEVertexBuffer VertexBuffer;
     MEIndiceBuffer IndiceBuffer;
-} [[hex::visualize("3d", VertexBuffer.Vertices, IndiceBuffer.Indices)]];
+};
 
 struct MESModel : MEForm<MESModel>
 {
@@ -369,9 +389,85 @@ struct MEPathPoint : MEForm<MEPathPoint>
     MEPathElement PathElement[while(next_form_is(typenameof(MEPathElement)))];
 };
 
+struct MEParticleStartSize : MEProp
+{
+    float Width;
+    float Height;
+};
+
+struct MEParticleMiddleSize : MEProp
+{
+    u32;
+    float;
+    float;
+    float;
+    float;
+};
+
+struct MEParticleEndSize : MEProp
+{
+    float Width;
+    float Height;
+};
+
+// Unused, only exists in text form
+struct MEParticle : MEForm<MEParticle>
+{
+    MEMaterial Material;
+    MEDataProp TEXF;
+    MEDataProp DEST;
+    MEDataProp EMIS;
+    MEDataProp Lifetime;
+    MEDataProp Spread;
+    MEDataProp Speed;
+    MEDataProp PLAN;
+    MEDataProp ISPD;
+    MEDataProp Acceleration;
+    MEDataProp Line;
+    MEDataProp RSPD;
+    MEDataProp ANIT;
+    MEDataProp StartSize;
+    MEDataProp MiddleSize;
+    MEDataProp EndSize;
+    MEDataProp StartColor;
+    MEDataProp MiddleColor;
+    MEDataProp EndColor;
+};
+
+struct MEPhysical : MEForm<MEPhysical>
+{
+    MEDataProp Dimensions;
+    MEDataProp Mass;
+    MEDataProp Elasticity;
+    MEDataProp Friction;
+    MEDataProp Damping;
+};
+
+struct MEFLCL : MEForm<MEFLCL>
+{
+    MEStringProp Name;
+    
+};
+
+struct MEBoatControl : MEForm<MEBoatControl>
+{
+    MEDataProp MotorPosition;
+    MEDataProp STAN;
+    MEDataProp MotorPower;
+    MEDataProp MaxVelocity;
+    MEDataProp BOX;
+    MEDataProp Strenght;
+    MEStringProp MotorSound;
+    
+    // TODO: one or more ANIM props
+};
+
 // The assumption is that MEO and binary IFFs begin with a FORM
 struct MEObject
 {
+    if (std::mem::eof())
+        break;
+
     MEFormHeader Header [[no_unique_address, hidden]];
 
     if (Header.Id == "WTCL") {
@@ -380,24 +476,28 @@ struct MEObject
         // Just in case they export other types of data in a MEO
         match (Header.Type)
         {
-            ("MDL "): MEModel      Model;
-            ("SMDL"): MESModel     SModel;
-            ("MESH"): MEMesh       Mesh;
-            ("MATR"): MEMaterial   Material;
-            ("LVL "): MELevel      Level;
-            ("SECT"): MESection    Section;
-            ("CBND"): MELevelBound Bound;
-            ("LINK"): MELink       Link;
-            ("CPLG"): MECPLG       CPLG;
-            ("CPLC"): MECPLC       CPLC;
-            ("CPLS"): MECPLS       CPLS;
-            ("PPNT"): MEPathPoint  PathPoint;
+            ("MDL "): MEModel       Model;
+            ("SMDL"): MESModel      SModel;
+            ("MESH"): MEMesh        Mesh;
+            ("MATR"): MEMaterial    Material;
+            ("LVL "): MELevel       Level;
+            ("SECT"): MESection     Section;
+            ("CBND"): MELevelBound  Bound;
+            ("LINK"): MELink        Link;
+            ("CPLG"): MECPLG        CPLG;
+            ("CPLC"): MECPLC        CPLC;
+            ("CPLS"): MECPLS        CPLS;
+            ("PPNT"): MEPathPoint   PathPoint;
+            ("PTCL"): MEParticle    Particle;
+            ("BTCL"): MEBoatControl BoatControl;
+            ("FLCL"): MEFLCL        FLCL;
+            ("PHYS"): MEPhysical    Physical;
             (_): break;
         }
     }
 };
 
-MEObject root[while(!std::mem::eof())] @ 0x0;
+MEObject root[while(true)] @ 0x0;
 
 /*
 Known prop types:
