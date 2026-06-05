@@ -110,7 +110,23 @@ struct MEStringProp : MEProp
 };
 
 struct MELinkId : MEDataProp
+{};
+
+struct MEWTCLData
+{};
+
+struct MEWTCL
 {
+    char Id[4];
+    u16;
+    u16;
+    u16;
+    u16;
+    u32;
+    u32;
+    u32;
+    u32;
+    
 };
 
 struct METypedProp<T>
@@ -190,7 +206,7 @@ struct MEForm<T>
 
     MEFormHeader _Header [[no_unique_address]];
     
-    if (! form_type_check(typenameof(T), _Header))
+    if (formtype_to_id(typenameof(T)) != _Header.Type)
     {
         ParentBreaking = true;
         break;
@@ -255,7 +271,7 @@ struct MEMaterial : MEForm<MEMaterial>
 struct MEMesh : MEForm<MEMesh>
 {
     if (ParentBreaking)
-        break;
+        return;
 
     MEMaterial Material;
     MEVertexBuffer VertexBuffer;
@@ -274,7 +290,7 @@ struct MESModel : MEForm<MESModel>
 struct MEModel : MEForm<MEModel>
 {
     if (ParentBreaking)
-        break;
+        return;
 
     MEDataProp Prop;
     MESModel SModels[while(true)];
@@ -350,22 +366,26 @@ struct MELevelBound : MEForm<MELevelBound>
 // The assumption is that MEO and binary IFFs begin with a FORM
 struct MEObject
 {
-    MEFormHeader Header [[no_unique_address]];
+    MEFormHeader Header [[no_unique_address, hidden]];
 
-    // Just in case they export other types of data in a MEO
-    match (Header.Type)
-    {
-        ("MDL "): MEModel      Model;
-        ("SMDL"): MESModel     SModel;
-        ("MESH"): MEMesh       Mesh;
-        ("MATR"): MEMaterial   Material;
-        ("LVL "): MELevel      Level;
-        ("SECT"): MESection    Section;
-        ("CBND"): MELevelBound Bound;
-        ("LINK"): MELink       Link;
-        ("CPLG"): MECPLG       CPLG;
-        ("CPLC"): MECPLC       CPLC;
-        ("CPLS"): MECPLS       CPLS;
+    if (Header.Id == "WTCL") {
+        MEWTCL WTCL;
+    } else {
+        // Just in case they export other types of data in a MEO
+        match (Header.Type)
+        {
+            ("MDL "): MEModel      Model;
+            ("SMDL"): MESModel     SModel;
+            ("MESH"): MEMesh       Mesh;
+            ("MATR"): MEMaterial   Material;
+            ("LVL "): MELevel      Level;
+            ("SECT"): MESection    Section;
+            ("CBND"): MELevelBound Bound;
+            ("LINK"): MELink       Link;
+            ("CPLG"): MECPLG       CPLG;
+            ("CPLC"): MECPLC       CPLC;
+            ("CPLS"): MECPLS       CPLS;
+        }
     }
 };
 
