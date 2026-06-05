@@ -22,6 +22,24 @@ fn formtype_to_id(str TypeName)
         ("MEMaterial"): return "MATR";
         ("MELevel"): return "LVL ";
         ("MESection"): return "SECT";
+        ("MELevelBound"): return "CBND";
+        ("MELink"): return "LINK";
+        ("MECPLG"): return "CPLG";
+        ("MECPLC"): return "CPLC";
+        ("MECPLS"): return "CPLS";
+        (_): return "";
+    }
+};
+
+fn proptype_to_id(str TypeName)
+{
+    match (TypeName)
+    {
+        ("MEVertexBuffer"): return "VTXB";
+        ("MEIndiceBuffer"): return "VTIB";
+        ("MELinkId"): return "LKID";
+        ("MEDataProp"): return "PROP";
+        ("MEStringProp"): return "PROP";
         (_): return "";
     }
 };
@@ -91,6 +109,10 @@ struct MEStringProp : MEProp
     }
 };
 
+struct MELinkId : MEDataProp
+{
+};
+
 struct METypedProp<T>
 {
     MEPropHeader Header;
@@ -107,19 +129,53 @@ struct MEFormHeader
     char Type[4];
 };
 
-fn typedform_type_check(str TypeName, ref MEFormHeader Header)
+fn form_type_check(str TypeName, ref MEFormHeader Header)
 {   
     str typeId = formtype_to_id(TypeName);
     return Header.Type == typeId;
 };
 
-fn typedform_type_check_at(str TypeName, u128 ptr)
+fn prop_type_check(str TypeName, ref MEPropHeader Header)
+{
+    str typeId = proptype_to_id(TypeName);
+    return Header.Field == typeId;
+};
+
+fn form_type_check_at(str TypeName, u128 ptr)
 {
     if (std::mem::eof())
         return false;
 
     MEFormHeader Header @ ptr;
-    return typedform_type_check(TypeName, Header);
+    return form_type_check(TypeName, Header);
+};
+
+fn prop_type_check_at(str TypeName, u128 ptr)
+{
+    if (std::mem::eof())
+        return false;
+        
+    MEPropHeader Header @ ptr;
+    return prop_type_check(TypeName, Header);
+};
+
+
+fn next_form_is(str TypeName)
+{
+    if (std::mem::eof())
+        return false;
+        
+    MEFormHeader Header @ $;
+    return form_type_check(TypeName, Header);
+};
+
+fn next_prop_is(str TypeName)
+{
+    if (std::mem::eof())
+        return false;
+        
+    MEPropHeader Header @ $;
+    return prop_type_check(TypeName, Header);
 };
 
 struct MEForm<T>
@@ -132,9 +188,9 @@ struct MEForm<T>
         break;
     }
 
-    MEFormHeader _Header [[no_unique_address, hidden]];
+    MEFormHeader _Header [[no_unique_address]];
     
-    if (! typedform_type_check(typenameof(T), _Header))
+    if (! form_type_check(typenameof(T), _Header))
     {
         ParentBreaking = true;
         break;
@@ -147,14 +203,13 @@ struct METypedForm<T>
 {
     if (std::mem::eof())
         break;
-        
-    //MEFormHeader Headert[[no_unique_address]];
+
     MEFormHeader _Header [[no_unique_address]];
     
     if (_Header.Id != "FORM" )
         break;
         
-    if (! typedform_type_check(typenameof(T), _Header))
+    if (! form_type_check(typenameof(T), _Header))
         break;
 
     MEFormHeader Header;
@@ -222,8 +277,6 @@ struct MEModel : MEForm<MEModel>
         break;
 
     MEDataProp Prop;
-    //METypedForm<MESModel> SModels[while(!std::mem::eof())];
-    //MERecursiveTypedForm<MESModel> SModels;
     MESModel SModels[while(true)];
 };
 
@@ -239,9 +292,59 @@ struct MESection : MEForm<MESection>
 struct MELevel : MEForm<MELevel>
 {
     if (ParentBreaking)
-        break;
+        return;
 
     MESection Section[while(true)];
+};
+
+struct MECPLS : MEForm<MECPLS>
+{
+    if (ParentBreaking)
+        return;
+    
+    MEDataProp Prop;
+};
+
+struct MECPLC : MEForm<MECPLC>
+{
+    if (ParentBreaking)
+        break;
+        
+    if (next_form_is(typenameof(MECPLS)))
+        MECPLS CPLS;
+};
+
+struct MECPLG : MEForm<MECPLG>
+{
+    if (ParentBreaking)
+        break;
+
+    MEDataProp Prop;
+};
+
+struct MELink : MEForm<MELink>
+{
+    if (ParentBreaking)
+        break;
+
+    if (next_prop_is(typenameof(MELinkId)))
+        MELinkId LinkId;
+    
+    if (next_form_is(typenameof(MECPLG)))
+        MECPLG CPLG;
+        
+    if (next_form_is(typenameof(MECPLC)))
+        MECPLC CPLC[while(true)];
+        
+    if (next_form_is(typenameof(MECPLS)))
+        MECPLS CPLS;
+};
+
+
+struct MELevelBound : MEForm<MELevelBound>
+{
+    MEDataProp Prop;
+    MELink Link[while(true)];
 };
 
 // The assumption is that MEO and binary IFFs begin with a FORM
@@ -252,12 +355,17 @@ struct MEObject
     // Just in case they export other types of data in a MEO
     match (Header.Type)
     {
-        ("MDL "): MEModel    Model;
-        ("SMDL"): MESModel   SModel;
-        ("MESH"): MEMesh     Mesh;
-        ("MATR"): MEMaterial Material;
-        ("LVL "): MELevel    Level;
-        ("SECT"): MESection  Section;
+        ("MDL "): MEModel      Model;
+        ("SMDL"): MESModel     SModel;
+        ("MESH"): MEMesh       Mesh;
+        ("MATR"): MEMaterial   Material;
+        ("LVL "): MELevel      Level;
+        ("SECT"): MESection    Section;
+        ("CBND"): MELevelBound Bound;
+        ("LINK"): MELink       Link;
+        ("CPLG"): MECPLG       CPLG;
+        ("CPLC"): MECPLC       CPLC;
+        ("CPLS"): MECPLS       CPLS;
     }
 };
 
@@ -318,7 +426,7 @@ FAKF
 FLCL: Some kind of form, has a name which links to a boat meo and then a PHYS form
 WTCL: Something for the water
 BBND
-CBND
+CBND: Level bounds
 SECD
 SECT
 LVL
