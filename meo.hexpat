@@ -27,6 +27,8 @@ fn formtype_to_id(str TypeName)
         ("MECPLG"): return "CPLG";
         ("MECPLC"): return "CPLC";
         ("MECPLS"): return "CPLS";
+        ("MEPathPoint"): return "PPNT";
+        ("MEPathElement"): return "PELE";
         (_): return "";
     }
 };
@@ -178,20 +180,12 @@ fn prop_type_check_at(str TypeName, u128 ptr)
 
 fn next_form_is(str TypeName)
 {
-    if (std::mem::eof())
-        return false;
-        
-    MEFormHeader Header @ $;
-    return form_type_check(TypeName, Header);
+    return form_type_check_at(TypeName, $);
 };
 
 fn next_prop_is(str TypeName)
 {
-    if (std::mem::eof())
-        return false;
-        
-    MEPropHeader Header @ $;
-    return prop_type_check(TypeName, Header);
+    return prop_type_check_at(TypeName, $);
 };
 
 struct MEForm<T>
@@ -204,7 +198,7 @@ struct MEForm<T>
         break;
     }
 
-    MEFormHeader _Header [[no_unique_address]];
+    MEFormHeader _Header [[no_unique_address, hidden]];
     
     if (formtype_to_id(typenameof(T)) != _Header.Type)
     {
@@ -363,6 +357,18 @@ struct MELevelBound : MEForm<MELevelBound>
     MELink Link[while(true)];
 };
 
+struct MEPathElement : MEForm<MEPathElement>
+{
+    MEDataProp Prop;
+    MELink Link;
+};
+
+struct MEPathPoint : MEForm<MEPathPoint>
+{
+    MEDataProp Prop;
+    MEPathElement PathElement[while(next_form_is(typenameof(MEPathElement)))];
+};
+
 // The assumption is that MEO and binary IFFs begin with a FORM
 struct MEObject
 {
@@ -385,11 +391,13 @@ struct MEObject
             ("CPLG"): MECPLG       CPLG;
             ("CPLC"): MECPLC       CPLC;
             ("CPLS"): MECPLS       CPLS;
+            ("PPNT"): MEPathPoint  PathPoint;
+            (_): break;
         }
     }
 };
 
-MEObject root @ 0x0;
+MEObject root[while(!std::mem::eof())] @ 0x0;
 
 /*
 Known prop types:
@@ -428,8 +436,8 @@ STRT: STaRTing Position, 4 floats
 CPLC
 CPLG
 CPLS
-PPNT
-PELE
+PPNT: Path PoiNT?
+PELE: Path ELEment?
 MSND: Motor SouND, links to a wav
 MAXV: MAX Volume?
 MPOW: Max POWer? Contains an int
